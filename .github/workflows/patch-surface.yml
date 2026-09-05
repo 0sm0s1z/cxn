@@ -1,0 +1,33 @@
+name: Patch surface
+
+# Reports how many upstream-owned files the current branch modifies relative
+# to `main`. The downstream fork stays mergeable only if this number stays
+# small. See docs/cxn/README.md and scripts/patch-surface.sh.
+
+on:
+  pull_request:
+    branches: [constellation]
+  push:
+    branches: [constellation]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch-surface report
+        run: |
+          ./scripts/patch-surface.sh | tee patch-surface.txt
+          {
+            echo "## Patch surface"
+            echo '```'
+            cat patch-surface.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
