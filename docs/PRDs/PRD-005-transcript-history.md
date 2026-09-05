@@ -1,6 +1,6 @@
 # PRD-005 — Transcript Navigation + Editable Forkable History
 
-Status: Draft. Sequence: 6-7. Depends on PRD-003, PRD-004.
+Status: Draft — core logic in `src/constellation/transcript.zig`, thin `cxn-status` wiring landed, transcript hook pending. Sequence: 6-7. Depends on PRD-003, PRD-004.
 
 ## Goal
 

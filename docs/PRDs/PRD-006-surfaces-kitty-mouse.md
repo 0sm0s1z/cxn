@@ -1,6 +1,6 @@
 # PRD-006 — Mouse + Surfaces + Kitty v1 + Rich Outputs + Toggle
 
-Status: Draft. Sequence: 8-12. Depends on PRD-005. Mouse-selectable slice ships with MVP; remainder is v1.5.
+Status: Draft — core logic in `src/constellation/surfaces.zig`, thin `cxn-status` wiring landed, render hit-map pending. Sequence: 8-12. Depends on PRD-005. Mouse-selectable slice ships with MVP; remainder is v1.5.
 
 ## Goal
 

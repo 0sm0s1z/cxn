@@ -146,6 +146,12 @@ const transcript_runtime = @import("ui/transcript/runtime.zig");
 const resume_projection = @import("ui/transcript/resume_projection.zig");
 const assistant_pacer = @import("ui/assistant/pacer.zig");
 const approval_prompt = @import("core/permissions/approval_prompt.zig");
+// Downstream hook (cxn): interaction layer lives in src/constellation/.
+// This import only links the module and its tests; product wiring lands per PRD.
+const constellation = @import("constellation/root.zig");
+comptime {
+    _ = constellation;
+}
 
 const Allocator = std.mem.Allocator;
 const Layout = types.Layout;
@@ -3276,6 +3282,10 @@ fn mainC(c_argc: c_int, c_argv: [*][*:0]c_char, c_envp: [*:null]?[*:0]c_char) !v
 
     var cli_arg_buf: [64][:0]const u8 = undefined;
     const cli_args = if (raw_args.len <= 1) &.{} else try cliArgsFromRaw(raw_args, &cli_arg_buf);
+    if (cli_args.len > 0 and std.mem.eql(u8, cli_args[0], "cxn-status")) {
+        try runCxnStatusFast(raw_env, cli_args);
+        exitFast(0);
+    }
     if (command_runner.isForegroundSessionInvocation(cli_args)) {
         io_mod.setRawEnviron(raw_env);
         const process_args = argsFromRaw(raw_args);
@@ -3308,6 +3318,51 @@ fn writeTopLevelHelpFast(raw_env: RawEnviron) !void {
         style,
     );
     try writeStdoutFast(text);
+}
+
+// Downstream hook (cxn): local-only status over shipped constellation paths.
+fn runCxnStatusFast(raw_env: RawEnviron, cli_args: []const [:0]const u8) !void {
+    const alloc = processAllocator();
+    var want_json = false;
+    for (cli_args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "--json")) want_json = true;
+    }
+    const endpoint = constellation.integration.resolveEndpoint(
+        rawEnvValue(raw_env, "FX_CONSTELLATION_BASE_URL"),
+        rawEnvValue(raw_env, "FX_CONSTELLATION_API_KEY"),
+    );
+    var ctl = constellation.integration.Controller.init(alloc);
+    defer ctl.deinit();
+    _ = try ctl.tr.append(.user_message, "Fix the auth handler.");
+    _ = try ctl.tr.append(.assistant_message, "Done.");
+    ctl.enterTranscript();
+    _ = ctl.tr.moveNext();
+    _ = ctl.runCommand("conversation.block.copy");
+    try ctl.rebuildHitMap();
+    const catalog = try constellation.provider.buildCatalog(alloc, &.{ "grok-4", "gpt-5" });
+    defer alloc.free(catalog);
+    const focus_index = ctl.tr.focus orelse 0;
+    const decision = constellation.transcript.decideBranch(focus_index, ctl.tr.blocks.items.len -| 1);
+    const hit = ctl.hits.hitTest(0, 1);
+    const snap = constellation.integration.Snapshot{
+        .endpoint_valid = endpoint.valid,
+        .base_url = endpoint.base_url,
+        .has_api_key = endpoint.has_api_key,
+        .catalog = catalog,
+        .mode = "transcript",
+        .focused_text = ctl.focusedText(),
+        .branch_on_edit = decision.branch,
+        .diagram = constellation.surfaces.pickDiagram(.text),
+        .image = constellation.surfaces.pickImage(.text),
+        .hit_object = if (hit) |h| h.object_id else null,
+        .placement_gen = ctl.placements.current,
+    };
+    const out = if (want_json)
+        try constellation.integration.renderJson(alloc, snap)
+    else
+        try constellation.integration.renderText(alloc, snap);
+    defer alloc.free(out);
+    try writeStdoutFast(out);
 }
 
 fn runNonBenchmark(raw_args: []const [*:0]const u8, raw_env: RawEnviron, cli_args: []const [:0]const u8) !void {

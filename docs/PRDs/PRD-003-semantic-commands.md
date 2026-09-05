@@ -1,6 +1,6 @@
 # PRD-003 — Semantic Command System
 
-Status: Draft. Sequence: 3. Required before Vim, mouse, palette.
+Status: Draft — core logic in `src/constellation/commands.zig`, thin `cxn-status` wiring landed, full dispatch wiring pending. Sequence: 3. Required before Vim, mouse, palette.
 
 ## Goal
 

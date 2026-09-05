@@ -4,14 +4,14 @@ Build order matters. Early items establish primitives everything after them need
 
 ## Sequence
 
-1. Fork plumbing and upstream discipline.
-2. Constellation Router provider (OpenAI-compatible transport + Router profile).
-3. Semantic command system.
-4. Real editor core (buffer, cursor, selection, undo, motions, operators, text objects).
+1. Fork plumbing and upstream discipline. (Landed: `8e6563ff`.)
+2. Constellation Router provider (OpenAI-compatible transport + Router profile). (Core logic in `src/constellation/provider.zig`; upstream registration pending.)
+3. Semantic command system. (Core logic in `src/constellation/commands.zig`; dispatch wiring pending.)
+4. Real editor core (buffer, cursor, selection, undo, motions, operators, text objects). (Core logic in `src/constellation/editor.zig`; composer seam pending.)
 5. Vim v1 (Insert/Normal/Visual, keymap file, `default`/`vim`/`minimal`).
-6. Transcript object navigation (block focus, Transcript mode).
+6. Transcript object navigation (block focus, Transcript mode). (Core logic in `src/constellation/transcript.zig`; transcript hook pending.)
 7. Editable historical prompts (branch/rewind, never silent mutation).
-8. Mouse interaction model (hit regions, focus, scroll, clickable footer).
+8. Mouse interaction model (hit regions, focus, scroll, clickable footer). (Core logic in `src/constellation/surfaces.zig`; render hit-map pending.)
 9. Surface abstraction (source vs presentation lifecycles).
 10. Kitty graphics v1 (probe, placements, resize invalidation, fallback).
 11. Rich outputs (images first, then Mermaid/SVG/charts).
@@ -34,7 +34,7 @@ FX upstream
 + Mouse-selectable transcript blocks
 ```
 
-MVP acceptance is end-to-end in the built binary: connect Router, pick a model, edit in Normal mode, navigate blocks with `j/k`, fork from an edited prompt, click a block to focus. No Kitty or browser required.
+MVP acceptance is end-to-end in the built binary: connect Router, pick a model, edit in Normal mode, navigate blocks with `j/k`, fork from an edited prompt, click a block to focus. No Kitty or browser required. The local-only `fx cxn-status [--json]` path already exercises that chain (endpoint, catalog, Normal-mode edit, block focus, fork decision, hit-map, text presentation) with no network; live Router selection is the remaining registration work.
 
 ## v1.5 (establishes graphics architecture)
 

@@ -1,6 +1,6 @@
 # PRD-004 — Editor Core + Vim v1 + Keymap
 
-Status: Draft. Sequence: 4-5. Depends on PRD-003.
+Status: Draft — core logic in `src/constellation/editor.zig`, thin `cxn-status` wiring landed, composer seam pending. Sequence: 4-5. Depends on PRD-003.
 
 ## Goal
 

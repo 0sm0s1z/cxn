@@ -1,6 +1,6 @@
 # PRD-001 — Fork Plumbing and Upstream Discipline
 
-Status: Draft. Sequence: 1. Covers repository topology, sync, and patch-surface metric.
+Status: Landed (commit `8e6563ff`). Sequence: 1. Covers repository topology, sync, and patch-surface metric.
 
 ## Goal
 

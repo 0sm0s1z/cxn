@@ -1,6 +1,6 @@
 # PRD-002 — Constellation Router Provider
 
-Status: Draft. Sequence: 2. Depends on PRD-001.
+Status: Draft — core logic in `src/constellation/provider.zig`, thin `cxn-status` wiring landed, full provider registration pending. Sequence: 2. Depends on PRD-001.
 
 ## Goal
 
