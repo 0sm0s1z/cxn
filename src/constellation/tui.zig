@@ -265,9 +265,27 @@ pub const App = struct {
     pub fn feedInput(self: *App, bytes: []const u8, now_ms: i64) !void {
         for (bytes) |byte| {
             if (!self.running) break;
-            const ingress = self.decoder.feed(byte, .{ .now_ms = now_ms, .paste_active = self.paste.active(), .cancel_pending = false });
-            try self.routeIngress(ingress);
-            if (ingress.replay_byte_after_routing) |replay| try self.feedInput(&.{replay}, now_ms);
+            try self.feedByte(byte, now_ms);
+        }
+        try self.settlePaste();
+    }
+
+    fn feedByte(self: *App, byte: u8, now_ms: i64) !void {
+        const ingress = self.decoder.feed(byte, .{ .now_ms = now_ms, .paste_active = self.paste.active(), .cancel_pending = false });
+        try self.routeIngress(ingress);
+        if (ingress.replay_byte_after_routing) |replay| try self.feedByte(replay, now_ms);
+    }
+
+    fn settlePaste(self: *App) !void {
+        const settlement = self.paste.settleDeliveryEpoch();
+        if (settlement == .none) return;
+        defer self.paste.resetWithTrace(.session_reset);
+        if (settlement == .reject or self.paste.overflow_bytes > 0 or !std.unicode.utf8ValidateSlice(self.paste.buffer.items)) {
+            self.setStatus("Paste rejected: unsafe suffix, size, or UTF-8");
+        } else if (self.ctl.mode == .insert) {
+            try self.ctl.ed.insertText(self.paste.buffer.items);
+        } else if (self.ctl.mode == .command) {
+            try self.cmd.appendSlice(self.alloc, self.paste.buffer.items);
         }
     }
 
@@ -281,16 +299,6 @@ pub const App = struct {
             .raw => |raw| try self.handleByte(raw.byte),
             .paste_byte => |byte| {
                 try self.paste.consumeByte(self.alloc, byte);
-                if (self.paste.settleDeliveryEpoch() == .finish) {
-                    defer self.paste.resetWithTrace(.session_reset);
-                    if (self.paste.overflow_bytes > 0 or !std.unicode.utf8ValidateSlice(self.paste.buffer.items)) {
-                        self.setStatus("Paste rejected: too large or invalid UTF-8");
-                    } else if (self.ctl.mode == .insert) {
-                        try self.ctl.ed.insertText(self.paste.buffer.items);
-                    } else if (self.ctl.mode == .command) {
-                        try self.cmd.appendSlice(self.alloc, self.paste.buffer.items);
-                    }
-                }
             },
             .action => |decoded| switch (decoded.action) {
                 .escape => try self.handleKey(.esc),
@@ -373,7 +381,7 @@ pub const App = struct {
         if (self.ctl.mode == .command) {
             var cline: std.Io.Writer.Allocating = .init(alloc);
             defer cline.deinit();
-            try cline.writer.print(":{s}▌", .{self.cmd.items});
+            try cline.writer.print(":{s}▌", .{visibleSuffix(self.cmd.items, w -| 2)});
             const s = try cline.toOwnedSlice();
             defer alloc.free(s);
             try writeLine(wr, s, w);
@@ -385,12 +393,7 @@ pub const App = struct {
             // Keep the insertion point visible when the draft exceeds one row.
             const prefix_width = mode_name.len + 3;
             const available = w -| (prefix_width + 1);
-            var start: usize = 0;
-            while (start < cursor and display_width.visibleWidth(text[start..cursor]) > available) {
-                start += 1;
-                while (start < cursor and text[start] & 0xc0 == 0x80) start += 1;
-            }
-            try cline.writer.print("[{s}] {s}▌{s}", .{ mode_name, text[start..cursor], text[cursor..] });
+            try cline.writer.print("[{s}] {s}▌{s}", .{ mode_name, visibleSuffix(text[0..cursor], available), text[cursor..] });
             const s = try cline.toOwnedSlice();
             defer alloc.free(s);
             try writeLine(wr, s, w);
@@ -427,11 +430,34 @@ pub const App = struct {
     }
 };
 
+fn renderedUnit(text: []const u8, i: usize) display_width.DisplayUnit {
+    if (text[i] < 32 or text[i] == 127) return .{ .byte_len = 1, .cell_width = 1 };
+    return display_width.displayUnitAt(text, i);
+}
+
+/// Two linear passes, sharing exactly the emission rules in writeLine.
+fn visibleSuffix(text: []const u8, width: usize) []const u8 {
+    var cells: usize = 0;
+    var i: usize = 0;
+    while (i < text.len) {
+        const unit = renderedUnit(text, i);
+        cells += unit.cell_width;
+        i += unit.byte_len;
+    }
+    i = 0;
+    while (i < text.len and cells > width) {
+        const unit = renderedUnit(text, i);
+        cells -= unit.cell_width;
+        i += unit.byte_len;
+    }
+    return text[i..];
+}
+
 fn writeLine(wr: *std.Io.Writer, text: []const u8, width: usize) !void {
     var cells: usize = 0;
     var i: usize = 0;
     while (i < text.len) {
-        const unit = display_width.displayUnitAt(text, i);
+        const unit = renderedUnit(text, i);
         const bytes = text[i..][0..unit.byte_len];
         // Never emit transcript/paste controls as terminal commands or rows.
         if (text[i] < 32 or text[i] == 127) {
@@ -553,4 +579,33 @@ test "bracketed paste stays text and never submits embedded newlines" {
     try std.testing.expectEqualStrings("hello\nworld café", app.ctl.ed.text());
     try std.testing.expectEqual(@as(usize, 2), app.ctl.tr.blocks.items.len);
     try std.testing.expect(!app.paste.active());
+}
+
+test "paste end candidate cannot turn a same-delivery suffix into commands" {
+    const alloc = std.testing.allocator;
+    var app = try App.init(alloc, integration.resolveEndpoint(null, null), &.{"auto"});
+    defer app.deinit();
+    try app.feedInput("i\x1b[200~hello\x1b[201~\rMORE\x1b[201~", 0);
+    try std.testing.expectEqualStrings("", app.ctl.ed.text());
+    try std.testing.expectEqual(@as(usize, 2), app.ctl.tr.blocks.items.len);
+    try std.testing.expectEqual(integration.AppMode.insert, app.ctl.mode);
+    try std.testing.expect(std.mem.startsWith(u8, app.status(), "Paste rejected"));
+}
+
+test "large drafts and multiline pastes retain visible tail and cursor" {
+    const alloc = std.testing.allocator;
+    var app = try App.init(alloc, integration.resolveEndpoint(null, null), &.{"auto"});
+    defer app.deinit();
+    try app.handleKey(.{ .char = 'i' });
+    const large = try alloc.alloc(u8, 1024 * 1024);
+    defer alloc.free(large);
+    for ([_]u8{ 'x', '\n', '\t', '\r' }) |fill| {
+        @memset(large, fill);
+        try app.ctl.ed.setText(large);
+        app.ctl.ed.cursor = large.len;
+        try app.ctl.ed.insertText("TAIL_SENTINEL");
+        const frame = try app.render(alloc, 60, 16);
+        defer alloc.free(frame);
+        try std.testing.expect(std.mem.indexOf(u8, frame, "TAIL_SENTINEL▌") != null);
+    }
 }

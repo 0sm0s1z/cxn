@@ -58,3 +58,25 @@ test.skipIf(!tmuxAvailable())("cxn console handles batched typing, redraw, paste
   expect(session.paneStatus().status).toBe(0);
   expect(readFileSync(stderrPath, "utf8")).toBe("");
 }, 30_000);
+
+test.skipIf(!tmuxAvailable())("large and multiline pastes keep the draft tail visible and the console responsive", async () => {
+  directory = mkdtempSync(join(tmpdir(), "cxn-console-large-"));
+  const stderrPath = join(directory, "stderr");
+  session = await TmuxSession.create({
+    cmd: `${JSON.stringify(FX_BIN)} cxn`,
+    width: 60,
+    height: 16,
+    stderrPath,
+    isolated: true,
+  });
+  await session.waitForText("local demo, not connected");
+  await session.sendKeys("i");
+  await session.pasteText(`${"x".repeat(60_000)}TAIL_SENTINEL`);
+  await session.waitForText("TAIL_SENTINEL▌", 3_000);
+  await session.pasteText(`${"\n".repeat(100)}MULTILINE_TAIL`);
+  await session.waitForText("MULTILINE_TAIL▌", 3_000);
+  await session.sendKeys("C-c");
+  expect(await session.waitForSessionEnd()).toBe(true);
+  expect(session.paneStatus().status).toBe(0);
+  expect(readFileSync(stderrPath, "utf8")).toBe("");
+}, 15_000);
