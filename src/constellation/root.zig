@@ -6,6 +6,8 @@ pub const editor = @import("editor.zig");
 pub const transcript = @import("transcript.zig");
 pub const surfaces = @import("surfaces.zig");
 pub const integration = @import("integration.zig");
+pub const tui = @import("tui.zig");
+pub const console_runtime = @import("console_runtime.zig");
 
 pub const product_name = "constellation";
 pub const mvp_scope = "FX upstream + router + vim composer + transcript mode + forkable prompts + clickable blocks";
@@ -17,6 +19,8 @@ test {
     std.testing.refAllDecls(transcript);
     std.testing.refAllDecls(surfaces);
     std.testing.refAllDecls(integration);
+    std.testing.refAllDecls(tui);
+    _ = @import("tui_render_tests.zig");
 }
 
 test "constellation root exposes the mvp scope" {

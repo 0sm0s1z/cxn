@@ -3286,6 +3286,10 @@ fn mainC(c_argc: c_int, c_argv: [*][*:0]c_char, c_envp: [*:null]?[*:0]c_char) !v
         try runCxnStatusFast(raw_env, cli_args);
         exitFast(0);
     }
+    if (cli_args.len > 0 and std.mem.eql(u8, cli_args[0], "cxn")) {
+        try runCxnFast(raw_env, cli_args);
+        exitFast(0);
+    }
     if (command_runner.isForegroundSessionInvocation(cli_args)) {
         io_mod.setRawEnviron(raw_env);
         const process_args = argsFromRaw(raw_args);
@@ -3363,6 +3367,48 @@ fn runCxnStatusFast(raw_env: RawEnviron, cli_args: []const [:0]const u8) !void {
         try constellation.integration.renderText(alloc, snap);
     defer alloc.free(out);
     try writeStdoutFast(out);
+}
+
+// Downstream hook (cxn): interactive console over the shipped controller.
+// Headless-safe: with no tty (or --headless/--print-once) render one frame
+// to stdout and exit instead of entering raw mode.
+fn runCxnFast(raw_env: RawEnviron, cli_args: []const [:0]const u8) !void {
+    const alloc = processAllocator();
+    var headless = false;
+    for (cli_args[1..]) |arg| {
+        if (std.mem.eql(u8, arg, "--headless") or
+            std.mem.eql(u8, arg, "--print-once") or
+            std.mem.eql(u8, arg, "--snapshot")) headless = true;
+    }
+    const endpoint = constellation.integration.resolveEndpoint(
+        rawEnvValue(raw_env, "FX_CONSTELLATION_BASE_URL"),
+        rawEnvValue(raw_env, "FX_CONSTELLATION_API_KEY"),
+    );
+    const catalog = try constellation.provider.buildCatalog(alloc, &.{ "grok-4", "gpt-5" });
+    defer alloc.free(catalog);
+    var app = try constellation.tui.App.init(alloc, endpoint, catalog);
+    defer app.deinit();
+
+    const stdin_tty = std.c.isatty(std.posix.STDIN_FILENO) != 0;
+    const stdout_tty = stdoutIsTerminal();
+    if (headless or !stdin_tty or !stdout_tty) {
+        const cols = stdoutTerminalColumns() orelse 80;
+        const rows = terminalRows() orelse 24;
+        const frame = try app.render(alloc, cols, rows);
+        defer alloc.free(frame);
+        try writeStdoutFast(frame);
+        return;
+    }
+    try constellation.console_runtime.run(alloc, &app);
+}
+
+fn terminalRows() ?usize {
+    if (comptime builtin.os.tag == .windows or !builtin.link_libc) return null;
+    var ws: std.posix.winsize = .{ .row = 0, .col = 0, .xpixel = 0, .ypixel = 0 };
+    const req: c_int = @intCast(std.c.T.IOCGWINSZ);
+    const rc = std.c.ioctl(std.posix.STDOUT_FILENO, req, &ws);
+    if (rc == -1 or ws.row == 0) return null;
+    return @intCast(ws.row);
 }
 
 fn runNonBenchmark(raw_args: []const [*:0]const u8, raw_env: RawEnviron, cli_args: []const [:0]const u8) !void {

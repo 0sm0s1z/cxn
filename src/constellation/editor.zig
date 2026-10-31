@@ -341,8 +341,10 @@ pub const Editor = struct {
     pub fn backspace(self: *Editor) !void {
         if (self.cursor == 0) return;
         try self.pushUndo();
-        self.buf.replaceRange(self.alloc, self.cursor - 1, 1, &.{"".*}) catch return;
-        self.cursor -= 1;
+        var start = self.cursor - 1;
+        while (start > 0 and self.buf.items[start] & 0xc0 == 0x80) start -= 1;
+        try self.buf.replaceRange(self.alloc, start, self.cursor - start, &.{});
+        self.cursor = start;
     }
 
     fn deleteRange(self: *Editor, r: Range) !void {
