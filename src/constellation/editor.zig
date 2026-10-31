@@ -341,7 +341,7 @@ pub const Editor = struct {
     pub fn backspace(self: *Editor) !void {
         if (self.cursor == 0) return;
         try self.pushUndo();
-        self.buf.replaceRange(self.alloc, self.cursor - 1, 1, &.{"".*}) catch return;
+        try self.buf.replaceRange(self.alloc, self.cursor - 1, 1, &.{});
         self.cursor -= 1;
     }
 
