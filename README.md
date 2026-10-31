@@ -21,6 +21,29 @@ It's open source (Apache-2.0), model-agnostic, and suitable for both local and c
 
 ## Install
 
+### cxn fork testing
+
+This checkout adds an experimental, local-only interaction demo. It is not
+connected to an agent or router, and it does not persist conversations.
+
+```bash
+zig build -Doptimize=ReleaseSafe
+./zig-out/bin/fx cxn                # Interactive local demo
+./zig-out/bin/fx cxn --headless     # One text frame without terminal controls
+./zig-out/bin/fx cxn-status --json  # Local foundation snapshot, not live status
+```
+
+In the demo, press `i` to compose, Enter to save locally, Escape to leave
+Insert mode, `j`/`k` to navigate transcript blocks, and `q` in Normal or
+Transcript mode to quit. Ctrl+C also exits. UTF-8 typing and bracketed paste
+are supported; pasted newlines stay in the draft until Enter. Historical
+editing, live model selection, and command execution are not implemented.
+The command-entry mode checks availability only and says when no action ran.
+
+Running `./zig-out/bin/fx` without `cxn` starts the inherited fx agent instead.
+
+### Upstream fx installer
+
 ```bash
 curl -fsSL https://fx.sh/setup.sh | bash
 ```

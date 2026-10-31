@@ -503,3 +503,11 @@ Minimum checklist:
 3. Push the feature branch and open a draft PR immediately.
 4. Require all four **Full CI** jobs and the final ship gate to pass for the exact current commit before marking the PR ready.
 5. Update `README.md` if user-facing behavior changed.
+
+## Downstream console checks
+
+Run `zig test src/constellation_tests.zig -O ReleaseSafe --test-filter constellation`
+for the focused downstream tests, including shared terminal-engine render
+regressions. After building, run `bun test cxn-console.test.ts` from
+`tests/e2e/` to exercise the freshly built console in tmux. Its PGSO owner is
+verification-only because the local demo is not a production agent hot path.

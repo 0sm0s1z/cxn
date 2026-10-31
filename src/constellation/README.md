@@ -13,6 +13,15 @@ thin downstream controller composed by `fx cxn-status [--json]` in
 when upstream wiring lands; no upstream-owned file may import these paths
 except through the thin registration points each PRD defines.
 
+`tui.zig` and `console_runtime.zig` implement the local-only `fx cxn` demo.
+The driver reuses the host raw-mode lifecycle and full-transcript screen
+owner. It does not connect to the agent or Router. Build from the repository
+root and run `./zig-out/bin/fx cxn`; see the root README for controls and limits.
+Focused tests use `zig test src/constellation_tests.zig -O ReleaseSafe
+--test-filter constellation` so shared terminal helpers stay inside the module
+root. `tui_render_tests.zig` checks actual screen output with the shared
+terminal engine, while `tests/e2e/cxn-console.test.ts` drives the binary in tmux.
+
 Planned sub-areas (created as features land, per `docs/ARCHITECTURE.md`):
 ```text
 src/constellation/
